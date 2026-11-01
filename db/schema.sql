@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS sessions CASCADE;
 DROP TABLE IF EXISTS settlements CASCADE;
 DROP TABLE IF EXISTS expense_splits CASCADE;
 DROP TABLE IF EXISTS expenses CASCADE;
@@ -9,6 +10,7 @@ CREATE TABLE users (
   user_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
   phone TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -56,4 +58,12 @@ CREATE TABLE settlements (
   CHECK (paid_by <> paid_to),
   FOREIGN KEY (group_id, paid_by) REFERENCES group_members (group_id, user_id),
   FOREIGN KEY (group_id, paid_to) REFERENCES group_members (group_id, user_id)
+);
+
+CREATE TABLE sessions (
+  session_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
 );

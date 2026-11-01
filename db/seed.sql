@@ -1,8 +1,8 @@
-INSERT INTO users (name, email) VALUES
-  ('A', 'a@example.com'),
-  ('B', 'b@example.com'),
-  ('C', 'c@example.com'),
-  ('D', 'd@example.com');
+INSERT INTO users (name, email, password_hash) VALUES
+  ('A', 'a@example.com', 'seed-not-a-real-hash'),
+  ('B', 'b@example.com', 'seed-not-a-real-hash'),
+  ('C', 'c@example.com', 'seed-not-a-real-hash'),
+  ('D', 'd@example.com', 'seed-not-a-real-hash');
 
 INSERT INTO groups (name, created_by) VALUES ('Goa Trip', 1);
 
