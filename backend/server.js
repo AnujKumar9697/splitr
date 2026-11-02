@@ -1,7 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const pool = require('./db');
+
 const app = express();
+const cors = require('cors');
+app.use(cors({ origin: 'http://localhost:5173' }));
 app.use(express.json());
 
 const crypto = require('crypto');
