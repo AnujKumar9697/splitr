@@ -311,6 +311,88 @@ app.post('/groups/:groupId/expenses', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/groups/:groupId/balances', requireAuth, async (req, res) => {
+  const groupId = Number(req.params.groupId);
+  if (!Number.isInteger(groupId)) {
+    return res.status(400).json({ error: 'invalid group id' });
+  }
+
+  try {
+    const member = await pool.query(
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      [groupId, req.user.user_id]
+    );
+    if (member.rowCount === 0) {
+      return res.status(403).json({ error: 'you are not a member of this group' });
+    }
+
+    const result = await pool.query(
+      `SELECT m.user_id, u.name,
+         COALESCE((SELECT SUM(e.amount_cents) FROM expenses e
+                   WHERE e.group_id = m.group_id AND e.paid_by = m.user_id), 0)
+         - COALESCE((SELECT SUM(s.amount_cents) FROM expense_splits s
+                     JOIN expenses e ON e.expense_id = s.expense_id
+                     WHERE e.group_id = m.group_id AND s.user_id = m.user_id), 0)
+         + COALESCE((SELECT SUM(t.amount_cents) FROM settlements t
+                     WHERE t.group_id = m.group_id AND t.paid_by = m.user_id), 0)
+         - COALESCE((SELECT SUM(t.amount_cents) FROM settlements t
+                     WHERE t.group_id = m.group_id AND t.paid_to = m.user_id), 0)
+         AS balance_cents
+       FROM group_members m
+       JOIN users u ON u.user_id = m.user_id
+       WHERE m.group_id = $1
+       ORDER BY m.user_id`,
+      [groupId]
+    );
+
+    res.status(200).json({ balances: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
+app.post('/groups/:groupId/settlements', requireAuth, async (req, res) => {
+  const groupId = Number(req.params.groupId);
+  const { paid_to, amount_cents } = req.body;
+
+  if (
+    !Number.isInteger(groupId) ||
+    !Number.isInteger(paid_to) ||
+    !Number.isInteger(amount_cents) || amount_cents <= 0
+  ) {
+    return res.status(400).json({ error: 'invalid settlement fields' });
+  }
+    if (paid_to === Number(req.user.user_id)) {
+    return res.status(400).json({ error: 'you cannot pay yourself' });
+  }
+
+  try {
+    const found = await pool.query(
+      'SELECT user_id FROM group_members WHERE group_id = $1 AND user_id = ANY($2::bigint[])',
+      [groupId, [req.user.user_id, paid_to]]
+    );
+    const memberIds = found.rows.map((r) => Number(r.user_id));
+    if (!memberIds.includes(Number(req.user.user_id))) {
+      return res.status(403).json({ error: 'you are not a member of this group' });
+    }
+    if (!memberIds.includes(paid_to)) {
+      return res.status(400).json({ error: 'the receiver is not a member of this group' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO settlements (group_id, paid_by, paid_to, amount_cents)
+       VALUES ($1, $2, $3, $4)
+       RETURNING settlement_id, group_id, paid_by, paid_to, amount_cents`,
+      [groupId, req.user.user_id, paid_to, amount_cents]
+    );
+    res.status(201).json({ settlement: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
 app.listen(3000, () => {
   console.log('Server listening on http://localhost:3000');
 });
