@@ -306,7 +306,8 @@ app.post('/groups/:groupId/expenses', requireAuth, async (req, res) => {
       const expense = await client.query(
         `INSERT INTO expenses (group_id, paid_by, amount_cents, description)
          VALUES ($1, $2, $3, $4)
-         RETURNING expense_id, group_id, paid_by, amount_cents, description, expense_date`,
+                  RETURNING expense_id, group_id, paid_by, amount_cents, description,
+                   to_char(expense_date, 'YYYY-MM-DD') AS expense_date`,
         [groupId, paid_by, amount_cents, description]
       );
       const expenseId = expense.rows[0].expense_id;
