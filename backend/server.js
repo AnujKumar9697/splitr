@@ -168,7 +168,7 @@ app.post('/groups/:groupId/members', requireAuth, async (req, res) => {
 
   try {
     const membership = await pool.query(
-      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL',
       [groupId, req.user.user_id]
     );
     if (membership.rows.length === 0) {
@@ -183,11 +183,20 @@ app.post('/groups/:groupId/members', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'no user with that email' });
     }
 
-    const newMember = userResult.rows[0];
-    await pool.query(
-      'INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)',
+        const newMember = userResult.rows[0];
+
+    // first try to bring back someone who left earlier
+    const rejoin = await pool.query(
+      'UPDATE group_members SET left_at = NULL WHERE group_id = $1 AND user_id = $2 AND left_at IS NOT NULL',
       [groupId, newMember.user_id]
     );
+    // no old row came back, so this person is brand new to the group
+    if (rejoin.rowCount === 0) {
+      await pool.query(
+        'INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)',
+        [groupId, newMember.user_id]
+      );
+    }
     res.status(201).json(newMember);
   } catch (err) {
     if (err.code === '23505') {
@@ -195,6 +204,33 @@ app.post('/groups/:groupId/members', requireAuth, async (req, res) => {
     }
     console.error(err);
     res.status(500).json({ error: 'something went wrong' });
+  }
+});
+
+app.post('/groups/:groupId/leave', requireAuth, async (req, res) => {
+  const groupId = Number(req.params.groupId);
+  if (!Number.isInteger(groupId)) {
+    return res.status(400).json({ error: 'invalid group id' });
+  }
+
+  try {
+    const balances = await getGroupBalances(groupId);
+    const mine = balances.find((b) => Number(b.user_id) === Number(req.user.user_id));
+    if (!mine) {
+      return res.status(403).json({ error: 'you are not a member of this group' });
+    }
+    if (Number(mine.balance_cents) !== 0) {
+      return res.status(400).json({ error: 'settle your balance before leaving this group' });
+    }
+
+    await pool.query(
+      'UPDATE group_members SET left_at = now() WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL',
+      [groupId, req.user.user_id]
+    );
+    res.status(200).json({ message: 'you left the group' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'server error' });
   }
 });
 
@@ -260,7 +296,7 @@ app.post('/groups/:groupId/expenses', requireAuth, async (req, res) => {
 
   try {
     const member = await pool.query(
-      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL',
       [groupId, req.user.user_id]
     );
     if (member.rowCount === 0) {
@@ -283,14 +319,14 @@ app.post('/groups/:groupId/expenses', requireAuth, async (req, res) => {
 
     const involved = [...new Set([paid_by, ...userIds])];
     const found = await pool.query(
-      'SELECT user_id FROM group_members WHERE group_id = $1 AND user_id = ANY($2::bigint[])',
+      'SELECT user_id FROM group_members WHERE group_id = $1 AND user_id = ANY($2::bigint[]) AND left_at IS NULL',
       [groupId, involved]
     );
     if (found.rowCount !== involved.length) {
       return res.status(400).json({ error: 'payer and participants must all be group members' });
     }
 
-            let splits;
+    let splits;
     if (split_type === 'equal') {
       splits = splitEqually(amount_cents, userIds);
     } else {
@@ -351,7 +387,7 @@ async function getGroupBalances(groupId) {
        AS balance_cents
      FROM group_members m
      JOIN users u ON u.user_id = m.user_id
-     WHERE m.group_id = $1
+     WHERE m.group_id = $1 AND m.left_at IS NULL
      ORDER BY m.user_id`,
     [groupId]
   );
@@ -366,7 +402,7 @@ app.get('/groups/:groupId/balances', requireAuth, async (req, res) => {
 
   try {
     const member = await pool.query(
-      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL',
       [groupId, req.user.user_id]
     );
     if (member.rowCount === 0) {
@@ -398,7 +434,7 @@ app.post('/groups/:groupId/settlements', requireAuth, async (req, res) => {
 
   try {
     const found = await pool.query(
-      'SELECT user_id FROM group_members WHERE group_id = $1 AND user_id = ANY($2::bigint[])',
+      'SELECT user_id FROM group_members WHERE group_id = $1 AND user_id = ANY($2::bigint[]) AND left_at IS NULL',
       [groupId, [req.user.user_id, paid_to]]
     );
     const memberIds = found.rows.map((r) => Number(r.user_id));
@@ -430,7 +466,7 @@ app.get('/groups/:groupId/simplify', requireAuth, async (req, res) => {
 
   try {
     const member = await pool.query(
-      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL',
       [groupId, req.user.user_id]
     );
     if (member.rowCount === 0) {
@@ -452,7 +488,7 @@ app.get('/groups', requireAuth, async (req, res) => {
       `SELECT g.group_id, g.name
        FROM groups g
        JOIN group_members m ON m.group_id = g.group_id
-       WHERE m.user_id = $1
+       WHERE m.user_id = $1 AND m.left_at IS NULL AND m.left_at IS NULL
        ORDER BY g.group_id`,
       [req.user.user_id]
     );
@@ -471,7 +507,7 @@ app.get('/groups/:groupId/expenses', requireAuth, async (req, res) => {
 
   try {
     const member = await pool.query(
-      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL',
       [groupId, req.user.user_id]
     );
     if (member.rowCount === 0) {
@@ -502,7 +538,7 @@ app.get('/summary', requireAuth, async (req, res) => {
       `SELECT g.group_id, g.name
        FROM groups g
        JOIN group_members m ON m.group_id = g.group_id
-       WHERE m.user_id = $1
+       WHERE m.user_id = $1 AND m.left_at IS NULL AND m.left_at IS NULL
        ORDER BY g.group_id`,
       [myId]
     );

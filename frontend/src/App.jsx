@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from './api';
+import Brand from './Brand';
 import Login from './Login';
 import Groups from './Groups';
 import GroupPage from './GroupPage';
@@ -9,7 +10,7 @@ function App() {
     const saved = localStorage.getItem('user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [openGroupId, setOpenGroupId] = useState(null);
+  const [openGroup, setOpenGroup] = useState(null);
  
   function handleLoggedIn(loggedInUser) {
     localStorage.setItem('user', JSON.stringify(loggedInUser));
@@ -24,7 +25,7 @@ function App() {
     }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    setOpenGroupId(null);
+    setOpenGroup(null);
     setUser(null);
   }
  
@@ -34,14 +35,24 @@ function App() {
  
   return (
     <div>
-      <p>
-        Logged in as {user.name} <button onClick={handleLogout}>Log out</button>
-      </p>
+      <header className="topbar">
+        <Brand />
+        <div className="user">
+          <span style={{ fontWeight: 500 }}>Hi, {user.name}</span>
+          <button className="secondary" onClick={handleLogout}>
+            Log out
+          </button>
+        </div>
+      </header>
  
-      {openGroupId === null ? (
-        <Groups onOpenGroup={setOpenGroupId} />
+      {openGroup === null ? (
+        <Groups onOpenGroup={setOpenGroup} />
       ) : (
-        <GroupPage groupId={openGroupId} onBack={() => setOpenGroupId(null)} />
+        <GroupPage
+          groupId={openGroup.group_id}
+          groupName={openGroup.name}
+          onBack={() => setOpenGroup(null)}
+        />
       )}
     </div>
   );

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { api } from './api';
-
+import Brand from './Brand';
+ 
 function Login({ onLoggedIn }) {
   const [mode, setMode] = useState('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-
+ 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -22,30 +23,44 @@ function Login({ onLoggedIn }) {
       setError(err.message);
     }
   }
-
+ 
   return (
-    <form onSubmit={handleSubmit}>
-      <h2>{mode === 'login' ? 'Log in' : 'Create account'}</h2>
-      {mode === 'register' && (
-        <div>
+    <div className="auth-wrap">
+      <div className="auth-brand">
+        <Brand size={48} />
+        <p className="muted">Split expenses with friends, without the awkward maths.</p>
+      </div>
+ 
+      <form className="card auth-card" onSubmit={handleSubmit}>
+        <h2>{mode === 'login' ? 'Log in' : 'Create account'}</h2>
+        {mode === 'register' && (
           <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-      )}
-      <div>
-        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-      </div>
-      <div>
-        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      </div>
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      <button type="submit">{mode === 'login' ? 'Log in' : 'Create account'}</button>
-      <p>
-        <button type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+        )}
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        {error && <p className="negative">{error}</p>}
+        <button type="submit">{mode === 'login' ? 'Log in' : 'Create account'}</button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+        >
           {mode === 'login' ? 'I need an account' : 'I already have an account'}
         </button>
-      </p>
-    </form>
+      </form>
+    </div>
   );
 }
-
+ 
 export default Login;
+ 

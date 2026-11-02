@@ -26,6 +26,7 @@ CREATE TABLE group_members (
   group_id BIGINT NOT NULL REFERENCES groups (group_id),
   user_id BIGINT NOT NULL REFERENCES users (user_id),
   joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  left_at TIMESTAMPTZ,
   PRIMARY KEY (group_id, user_id)
 );
 
