@@ -127,6 +127,74 @@ app.post('/logout', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/groups', requireAuth, async (req, res) => {
+  const { name } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'group name is required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const groupResult = await client.query(
+      'INSERT INTO groups (name, created_by) VALUES ($1, $2) RETURNING group_id, name, created_at',
+      [name, req.user.user_id]
+    );
+    const group = groupResult.rows[0];
+    await client.query(
+      'INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)',
+      [group.group_id, req.user.user_id]
+    );
+    await client.query('COMMIT');
+    res.status(201).json(group);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'something went wrong' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/groups/:groupId/members', requireAuth, async (req, res) => {
+  const groupId = Number(req.params.groupId);
+  const { email } = req.body;
+  if (!Number.isInteger(groupId) || !email) {
+    return res.status(400).json({ error: 'valid group id and email are required' });
+  }
+
+  try {
+    const membership = await pool.query(
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      [groupId, req.user.user_id]
+    );
+    if (membership.rows.length === 0) {
+      return res.status(403).json({ error: 'you are not a member of this group' });
+    }
+
+    const userResult = await pool.query(
+      'SELECT user_id, name, email FROM users WHERE email = $1',
+      [email.toLowerCase()]
+    );
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'no user with that email' });
+    }
+
+    const newMember = userResult.rows[0];
+    await pool.query(
+      'INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)',
+      [groupId, newMember.user_id]
+    );
+    res.status(201).json(newMember);
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'already a member' });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'something went wrong' });
+  }
+});
+
 app.listen(3000, () => {
   console.log('Server listening on http://localhost:3000');
 });
