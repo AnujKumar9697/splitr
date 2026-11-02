@@ -443,6 +443,55 @@ app.get('/groups/:groupId/simplify', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/groups', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT g.group_id, g.name
+       FROM groups g
+       JOIN group_members m ON m.group_id = g.group_id
+       WHERE m.user_id = $1
+       ORDER BY g.group_id`,
+      [req.user.user_id]
+    );
+    res.status(200).json({ groups: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
+app.get('/groups/:groupId/expenses', requireAuth, async (req, res) => {
+  const groupId = Number(req.params.groupId);
+  if (!Number.isInteger(groupId)) {
+    return res.status(400).json({ error: 'invalid group id' });
+  }
+
+  try {
+    const member = await pool.query(
+      'SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2',
+      [groupId, req.user.user_id]
+    );
+    if (member.rowCount === 0) {
+      return res.status(403).json({ error: 'you are not a member of this group' });
+    }
+
+    const result = await pool.query(
+      `SELECT e.expense_id, e.description, e.amount_cents, e.paid_by,
+              u.name AS paid_by_name,
+              to_char(e.expense_date, 'YYYY-MM-DD') AS expense_date
+       FROM expenses e
+       JOIN users u ON u.user_id = e.paid_by
+       WHERE e.group_id = $1
+       ORDER BY e.expense_date DESC, e.expense_id DESC`,
+      [groupId]
+    );
+    res.status(200).json({ expenses: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
 app.listen(3000, () => {
   console.log('Server listening on http://localhost:3000');
 });
