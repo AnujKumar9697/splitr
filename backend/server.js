@@ -495,6 +495,45 @@ app.get('/groups/:groupId/expenses', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/summary', requireAuth, async (req, res) => {
+  try {
+    const myId = Number(req.user.user_id);
+    const groupsResult = await pool.query(
+      `SELECT g.group_id, g.name
+       FROM groups g
+       JOIN group_members m ON m.group_id = g.group_id
+       WHERE m.user_id = $1
+       ORDER BY g.group_id`,
+      [myId]
+    );
+
+    const groups = [];
+    for (const g of groupsResult.rows) {
+      const balances = await getGroupBalances(Number(g.group_id));
+      const mine = balances.find((b) => Number(b.user_id) === myId);
+      groups.push({
+        group_id: g.group_id,
+        name: g.name,
+        balance_cents: mine ? Number(mine.balance_cents) : 0,
+      });
+    }
+
+    const total = groups.reduce((sum, g) => sum + g.balance_cents, 0);
+    const owedToYou = groups.filter((g) => g.balance_cents > 0).reduce((sum, g) => sum + g.balance_cents, 0);
+    const youOwe = groups.filter((g) => g.balance_cents < 0).reduce((sum, g) => sum - g.balance_cents, 0);
+
+    res.status(200).json({
+      total_cents: total,
+      owed_to_you_cents: owedToYou,
+      you_owe_cents: youOwe,
+      groups,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
 app.listen(3000, () => {
   console.log('Server listening on http://localhost:3000');
 });
