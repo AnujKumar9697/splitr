@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { formatMoney } from './money';
+import AddExpense from './AddExpense';
+import RecordPayment from './RecordPayment';
+import AddMember from './AddMember';
  
 function GroupPage({ groupId, onBack }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
  
   useEffect(() => {
     Promise.all([
@@ -20,7 +24,7 @@ function GroupPage({ groupId, onBack }) {
         });
       })
       .catch((err) => setError(err.message));
-  }, [groupId]);
+  }, [groupId, reloadKey]);
  
   if (error) {
     return (
@@ -61,6 +65,20 @@ function GroupPage({ groupId, onBack }) {
           </li>
         ))}
       </ul>
+ 
+      <AddMember groupId={groupId} onAdded={() => setReloadKey(reloadKey + 1)} />
+ 
+      <RecordPayment
+        groupId={groupId}
+        members={data.balances}
+        onDone={() => setReloadKey(reloadKey + 1)}
+      />
+ 
+      <AddExpense
+        groupId={groupId}
+        members={data.balances}
+        onAdded={() => setReloadKey(reloadKey + 1)}
+      />
  
       <h2>Expenses</h2>
       {data.expenses.length === 0 && <p>No expenses yet.</p>}

@@ -534,6 +534,29 @@ app.get('/summary', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/payments', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT t.settlement_id, g.name AS group_name,
+              t.paid_by, p.name AS paid_by_name,
+              t.paid_to, r.name AS paid_to_name,
+              t.amount_cents,
+              to_char(t.settled_on, 'YYYY-MM-DD') AS settled_on
+       FROM settlements t
+       JOIN groups g ON g.group_id = t.group_id
+       JOIN users p ON p.user_id = t.paid_by
+       JOIN users r ON r.user_id = t.paid_to
+       WHERE t.paid_by = $1 OR t.paid_to = $1
+       ORDER BY t.settled_on DESC, t.settlement_id DESC`,
+      [req.user.user_id]
+    );
+    res.status(200).json({ payments: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
 app.listen(3000, () => {
   console.log('Server listening on http://localhost:3000');
 });

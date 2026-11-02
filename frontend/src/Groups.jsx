@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { formatMoney } from './money';
+import PaymentHistory from './PaymentHistory';
+import CreateGroup from './CreateGroup';
  
 function Groups({ onOpenGroup }) {
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
  
   useEffect(() => {
     api('/summary')
       .then(setSummary)
       .catch((err) => setError(err.message));
-  }, []);
+  }, [reloadKey]);
  
   if (error) {
     return <p style={{ color: 'crimson' }}>{error}</p>;
@@ -38,6 +41,10 @@ function Groups({ onOpenGroup }) {
           </li>
         ))}
       </ul>
+ 
+      <CreateGroup onCreated={() => setReloadKey(reloadKey + 1)} />
+ 
+      <PaymentHistory />
     </div>
   );
 }
